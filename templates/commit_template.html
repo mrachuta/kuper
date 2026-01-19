@@ -1,0 +1,12 @@
+<div class="commit">
+  <div class="commit-header">
+    <h3><a href="{{ commit_url }}" target="_blank" title="View commit in GitLab">{{ commit_message }}</a></h3>
+  </div>
+  <details>
+    <summary>Details and Diff</summary>
+    <pre>{{ diff }}</pre>
+  </details>
+  <div class="commit-meta">
+    <strong>SHA:</strong> {{ sha }} | <strong>Branch:</strong> {{ branch }} | <strong>Date:</strong> {{ date }}
+  </div>
+</div>

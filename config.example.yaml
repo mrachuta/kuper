@@ -1,0 +1,4 @@
+token: "somegitlabtoken123"
+excludes:
+  - "example-group/example-project-to-exclude"
+  - "another-group/another-project"
