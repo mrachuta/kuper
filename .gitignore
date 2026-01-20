@@ -1,6 +1,6 @@
 # Repo files
 config.yaml
-report*.html
+commit_report*.html
 token.bak
 
 # Byte-compiled / optimized / DLL files
