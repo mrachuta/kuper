@@ -33,10 +33,13 @@ TOOD
 ```
 ./kuper.py  --instance https://gitlab.com/ --days 10 --report
 ```
-optional arguments:
+required arguments:
 ```
 --instance INSTANCE  GitLab instance URL (e.g., https://gitlab.com)
 --days DAYS          Number of days from today to search for commits (max: 31)
+```
+optional arguments:
+```
 --report             Generate an interactive HTML report with commit details and diffs.
 ```
 

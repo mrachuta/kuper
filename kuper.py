@@ -260,7 +260,7 @@ def main():
             
             # Print to console
             date_str = datetime.datetime.fromisoformat(commit['created_at'].replace('Z', '+00:00')).strftime("%Y-%m-%d %H:%M")
-            print(f"{date_str} [{branch_name}] \"{commit['title']}\" {commit['short_id']} {commit['web_url']}")
+            print(f"{date_str} => [{branch_name}] {commit['short_id']} {commit['web_url']} \"{commit['title']}\"")
 
             if args.report:
                 full_diff = _get_commit_diff(session, api_url, project_id, commit['id'])
@@ -287,7 +287,7 @@ def main():
         final_html = final_html.replace('{{ commits }}', "\n".join(all_commit_html_blocks))
         
         report_filename = datetime.datetime.now().strftime("report_%Y-%m-%d-%H-%M-%S.html")
-        print(f"Generating HTML report to {report_filename}", file=sys.stderr)
+        print(f"\nGenerating HTML report to {report_filename}", file=sys.stderr)
         with open(report_filename, 'w', encoding='utf-8') as f:
             f.write(final_html)
         print("HTML Report generation complete.", file=sys.stderr)
