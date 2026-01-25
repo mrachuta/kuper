@@ -66,7 +66,7 @@ def get_gitlab_commits(instance_url, token, start_date, user_email, excludes=Non
     }
     events_url = f"{instance_url}/api/v4/events"
 
-    print("INFO: Scanning user events to find active repositories and branches...")
+    print("Scanning user events to find active repositories and branches...")
     while events_url:
         try:
             response = requests.get(events_url, headers=headers, params=events_params, timeout=20)
@@ -129,12 +129,13 @@ def get_gitlab_commits(instance_url, token, start_date, user_email, excludes=Non
     # --- Step 2: Fetch commits for each active repo/branch using the Commits API ---
     all_commits = []
     processed_shas = set()
-    
-    if active_repos_and_branches:
-        print(f"INFO: Found {len(active_repos_and_branches)} active branch(es). Now fetching commits...")
-
     # Define the desired branch processing order
     branch_order = ['master', 'main', 'prod', 'nonprod', 'develop', 'development']
+    
+    if active_repos_and_branches:
+        print(f"INFO: Found {len(active_repos_and_branches)} active branch(es). " +
+              'Branches will be processed in following order (if branch is active):\n' +
+              f"{' -> '.join(branch_order)} and rest of branches.\nNow fetching commits...")
 
     def sort_key(item):
         _project_id, repo_name, branch = item
@@ -149,7 +150,7 @@ def get_gitlab_commits(instance_url, token, start_date, user_email, excludes=Non
     sorted_active_branches = sorted(list(active_repos_and_branches), key=sort_key)
 
     for project_id, repo_name, branch in sorted_active_branches:
-        print(f"INFO: Fetching commits for '{repo_name}' on branch '{branch}'...")
+        print(f"Fetching commits for '{repo_name}' on branch '{branch}'...")
         
         commits_url = f"{instance_url}/api/v4/projects/{project_id}/repository/commits"
         commits_params = {
