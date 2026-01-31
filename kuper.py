@@ -126,6 +126,8 @@ def get_gitlab_commits(instance_url, token, start_date, user_email, excludes=Non
             print(f"Error scanning GitLab events: {e}")
             break
 
+    processed_repo_urls = sorted(list(set(f"{instance_url}/{r[1]}" for r in active_repos_and_branches)))
+
     # --- Step 2: Fetch commits for each active repo/branch using the Commits API ---
     all_commits = []
     processed_shas = set()
@@ -232,7 +234,7 @@ def get_gitlab_commits(instance_url, token, start_date, user_email, excludes=Non
                 print(f"  - Could not fetch commits for {repo_name} (branch: {branch}): {e}")
                 break
             
-    return sorted(all_commits, key=lambda x: (x['repo_name'], x['date']))
+    return sorted(all_commits, key=lambda x: (x['repo_name'], x['date'])), processed_repo_urls
 
 def generate_report(commits, report_title, output_filename="commits_report.html"):
     """Generates an HTML report from the commits."""
@@ -327,7 +329,7 @@ def main():
     # We need to fetch diffs if a report is requested
     fetch_diffs = args.report
 
-    commits = get_gitlab_commits(instance_url, token, days_ago, user_email, excludes=excludes, fetch_diffs=fetch_diffs)
+    commits, processed_repo_urls = get_gitlab_commits(instance_url, token, days_ago, user_email, excludes=excludes, fetch_diffs=fetch_diffs)
 
     if not commits:
         print("No new commits found for this user in the specified period.")
@@ -336,6 +338,13 @@ def main():
     # Always print the console output
     print_console_output(commits)
 
+    if processed_repo_urls:
+        print("\nActive repositories (without exclusions):")
+        for url in processed_repo_urls:
+            print(f"{url}.git")
+    else:
+        print("\nNo repositories to process after exclusion.")
+  
     if args.report:
         report_title = f"Commit Report for {user_email} - Last {args.days} Days"
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
