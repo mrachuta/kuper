@@ -282,7 +282,7 @@ def print_console_output(commits):
     last_repo_name = None
     for commit in commits:
         if commit['repo_name'] != last_repo_name:
-            print(f"\n===== REPOSITORY: {commit['repo_name']}")
+            print(f"\n===> REPOSITORY: {commit['repo_name']}")
             last_repo_name = commit['repo_name']
         
         commit_message_first_line = commit['message'].split('\n')[0]
