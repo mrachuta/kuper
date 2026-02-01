@@ -289,9 +289,9 @@ def print_console_output(commits):
 
         # Print commit details
         print(
-            f"{commit['date']}  |  {commit['short_sha']}  |  "
-            f"{commit['url']}  |   {commit['branch']}  |  "
-            f"'{commit_message_first_line}'"
+            f"=> {commit['date']}  |  {commit['short_sha']}  |  "
+            f"{commit['branch']}  |  '{commit_message_first_line}'\n"
+            f"{commit['url']}"
         )
 
 def main():
