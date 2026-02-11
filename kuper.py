@@ -71,7 +71,6 @@ def get_gitlab_commits(
     }
     events_url = f"{instance_url}/api/v4/events"
 
-    print("Scanning user events to find active repositories and branches...")
     while events_url:
         try:
             response = requests.get(
@@ -147,10 +146,6 @@ def get_gitlab_commits(
             print(f"Error scanning GitLab events: {e}")
             break
 
-    processed_repo_urls = sorted(
-        list(set(f"{instance_url}/{r[1]}" for r in active_repos_and_branches))
-    )
-
     # --- Step 2: Fetch commits for each active repo/branch using the Commits API ---
     all_commits = []
     processed_shas = set()
@@ -161,7 +156,7 @@ def get_gitlab_commits(
         print(
             f"INFO: Found {len(active_repos_and_branches)} active branch(es). "
             + "Branches will be processed in following order (if branch is active):\n"
-            + f"{' -> '.join(branch_order)} and rest of branches.\nNow fetching commits..."
+            + f"{' -> '.join(branch_order)} and rest of branches."
         )
 
     # TODO: to refactor, too complex logic
@@ -278,10 +273,7 @@ def get_gitlab_commits(
                 )
                 break
 
-    return (
-        sorted(all_commits, key=lambda x: (x["repo_name"], x["date"])),
-        processed_repo_urls,
-    )
+    return sorted(all_commits, key=lambda x: (x["repo_name"], x["date"]))
 
 
 def generate_report(commits, report_title, output_filename="commits_report.html"):
@@ -349,11 +341,12 @@ def print_console_output(commits, fetch_diffs=False):
         # Print commit details
         if fetch_diffs:
             print(commit["url"])
-        print(
-            f"=> {commit['date']}  |  {commit['short_sha']}  |  "
-            f"{commit['branch']}  |  '{commit_message_first_line}'\n"
-            f"{commit['url']}"
-        )
+        else:
+            print(
+                f"{commit['date']}  |  {commit['short_sha']}  |  "
+                f"{commit['branch']}  |  {commit['url']}  |  "
+                f"'{commit_message_first_line}'"
+            )
 
 
 def main():
@@ -395,7 +388,9 @@ def main():
     user_email = user_profile.get("email")
     username = user_profile.get("username", "user")
 
-    print(f"Fetching commits for user {user_email} from the last {args.days} days...")
+    print(
+        f"Fetching commits for user {user_email} from the last {args.days} days based on Events API..."
+    )
     if excludes:
         print(f"Excluding the following repositories: {', '.join(excludes)}")
 
@@ -404,7 +399,7 @@ def main():
     # We need to fetch diffs if a report is requested
     fetch_diffs = args.report
 
-    commits, processed_repo_urls = get_gitlab_commits(
+    commits = get_gitlab_commits(
         instance_url,
         token,
         days_ago,
@@ -419,13 +414,6 @@ def main():
 
     # Always print the console output
     print_console_output(commits, fetch_diffs=fetch_diffs)
-
-    if processed_repo_urls:
-        print("\nActive repositories (without exclusions):")
-        for url in processed_repo_urls:
-            print(f"{url}.git")
-    else:
-        print("\nNo repositories to process after exclusion.")
 
     if args.report:
         report_title = f"Commit Report for {user_email} - Last {args.days} Days"
