@@ -114,6 +114,12 @@ def get_gitlab_commits(instance_url, token, start_date, user_email, excludes=Non
                 branch = push_data.get("ref", "unknown-branch").replace("refs/heads/", "")
                 if branch != "unknown-branch":
                     active_repos_and_branches.add((project_id, repo_name, branch))
+                    # TODO: cover cases when someone merged your PR and you are no longer the author 
+                    # of the commits in the branch, but you still want to see those commits.
+                    # Now it's ugly hotfix.
+                    if branch != "master" and ((project_id, repo_name, "master") not in active_repos_and_branches):
+                        active_repos_and_branches.add((project_id, repo_name, "master"))
+
 
             # Pagination for events
             if 'next' in response.links:
