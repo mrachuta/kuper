@@ -11,10 +11,10 @@ kuper - a python script that collects users' commit history and detailed commit 
 - [Thanks](#thanks)
 
 ## General info
-TODO
+A simple script written with extensive AI support to collect information about user activity on the Gitlab platform. The script retrieves information about user activity using the "Events API," then searches for all user commits during a given time period. It presents them with details and optionally generates a report, omitting duplicates (the same commits existing in different branches).
 
 ## Technologies
-TOOD
+- python
 
 ## Setup
 
