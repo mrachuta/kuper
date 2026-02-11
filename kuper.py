@@ -120,7 +120,6 @@ def get_gitlab_commits(instance_url, token, start_date, user_email, excludes=Non
                     if branch != "master" and ((project_id, repo_name, "master") not in active_repos_and_branches):
                         active_repos_and_branches.add((project_id, repo_name, "master"))
 
-
             # Pagination for events
             if 'next' in response.links:
                 events_url = response.links['next']['url']
@@ -283,7 +282,7 @@ def generate_report(commits, report_title, output_filename="commits_report.html"
     with open(output_filename, "w") as f:
         f.write(final_html)
 
-def print_console_output(commits):
+def print_console_output(commits, fetch_diffs=False):
     """Prints the commits to the console."""
     last_repo_name = None
     for commit in commits:
@@ -294,6 +293,8 @@ def print_console_output(commits):
         commit_message_first_line = commit['message'].split('\n')[0]
 
         # Print commit details
+        if fetch_diffs:
+            print(commit['url'])
         print(
             f"=> {commit['date']}  |  {commit['short_sha']}  |  "
             f"{commit['branch']}  |  '{commit_message_first_line}'\n"
@@ -342,7 +343,7 @@ def main():
         return
 
     # Always print the console output
-    print_console_output(commits)
+    print_console_output(commits, fetch_diffs=fetch_diffs)
 
     if processed_repo_urls:
         print("\nActive repositories (without exclusions):")
