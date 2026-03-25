@@ -1,0 +1,18 @@
+name: Create release
+run-name: Release job triggered by ${{ github.event_name }} on ${{ github.ref_name }}
+on:
+  pull_request:
+    types:
+    - closed
+
+jobs:
+  publish-version:
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    steps:
+    - name: Publish version
+      uses: devwithkrishna/devwithkrishna-create-release-action@v1.0.1
+      with:
+        token: ${{ secrets.PAT_GITHUB_RELEASE_TOKEN }}
+        pr_number: ${{ github.event.number }}
+        generate_release_notes: true
