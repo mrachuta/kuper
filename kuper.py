@@ -361,18 +361,26 @@ def main():
         help="GitLab instance URL (e.g., https://gitlab.com)",
     )
     parser.add_argument(
-        "--days",
+        "--start-date",
+        "-s",
         required=True,
-        type=int,
-        help="Number of days to search for commits (max 45).",
+        help="Start date for commit search (YYYY-MM-DD).",
     )
     parser.add_argument(
         "--report", action="store_true", help="Generate an HTML report."
     )
     args = parser.parse_args()
 
-    if not (1 <= args.days <= 45):
-        print("Error: --days must be between 1 and 45.")
+    try:
+        start_date = datetime.datetime.strptime(args.start_date, "%Y-%m-%d")
+    except ValueError:
+        print("Error: --start-date must be in YYYY-MM-DD format.")
+        sys.exit(1)
+
+    # Validation: Ensure start-date is not more than 32 days ago
+    limit_date = datetime.datetime.now() - datetime.timedelta(days=32)
+    if start_date < limit_date:
+        print(f"Error: --start-date cannot be more than 32 days ago (must be on or after {limit_date.strftime('%Y-%m-%d')}).")
         sys.exit(1)
 
     instance_url = args.instance.rstrip("/")
@@ -389,12 +397,10 @@ def main():
     username = user_profile.get("username", "user")
 
     print(
-        f"Fetching commits for user {user_email} from the last {args.days} days based on Events API..."
+        f"Fetching commits for user {user_email} since {args.start_date} based on Events API..."
     )
     if excludes:
         print(f"Excluding the following repositories: {', '.join(excludes)}")
-
-    days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=args.days)
 
     # We need to fetch diffs if a report is requested
     fetch_diffs = args.report
@@ -402,7 +408,7 @@ def main():
     commits = get_gitlab_commits(
         instance_url,
         token,
-        days_ago,
+        start_date,
         user_email,
         excludes=excludes,
         fetch_diffs=fetch_diffs,
@@ -416,7 +422,8 @@ def main():
     print_console_output(commits, fetch_diffs=fetch_diffs)
 
     if args.report:
-        report_title = f"Commit Report for {user_email} - Last {args.days} Days"
+        today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+        report_title = f"Commit Report for {user_email} - Period: {args.start_date} to {today_str}"
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         output_filename = f"commit_report_{username}_{timestamp}.html"
         generate_report(commits, report_title, output_filename=output_filename)

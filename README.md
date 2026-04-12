@@ -31,12 +31,12 @@ A simple script written with extensive AI support to collect information about u
 ## Usage
 
 ```
-./kuper.py  --instance https://gitlab.com/ --days 10 --report
+./kuper.py  --instance https://gitlab.com/ --start-date 2026-04-12 --report
 ```
 required arguments:
 ```
---instance INSTANCE  GitLab instance URL (e.g., https://gitlab.com)
---days DAYS          Number of days from today to search for commits (max: 31)
+--instance INSTANCE      GitLab instance URL (e.g., https://gitlab.com)
+--start-date YYYY-MM-DD  Start date for commit search (YYYY-MM-DD).
 ```
 optional arguments:
 ```
