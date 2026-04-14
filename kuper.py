@@ -54,12 +54,12 @@ def get_gitlab_commits(
     instance_url, token, start_date, user_email, excludes=None, fetch_diffs=False
 ):
     """Fetches user's commits from GitLab API by discovering active projects,
-    scanning authored MRs, and exploring member projects."""
+    scanning MRs, and exploring member projects."""
     if excludes is None:
         excludes = []
     headers = {"PRIVATE-TOKEN": token}
 
-    # mapping of project_id -> { "path_with_namespace": "...", "branches": {"...", "..."} }
+    # mapping of project_id -> { "path_with_namespace": "...", "branches": ["...", "..."] }
     projects_to_scan = {}
     skipped_repos = set()
     mr_commits = []  # Explicitly store commits found in MRs
@@ -67,7 +67,7 @@ def get_gitlab_commits(
 
     # --- Step 1: Discovery ---
 
-    # 1.1 Events API
+    # 1.1 Events API (to find active projects)
     events_params = {"after": start_date.strftime("%Y-%m-%d"), "per_page": 100}
     events_url = f"{instance_url}/api/v4/events"
     while events_url:
@@ -78,59 +78,49 @@ def get_gitlab_commits(
                 project_id = event.get("project_id")
                 if not project_id: continue
                 if project_id not in projects_to_scan: projects_to_scan[project_id] = {"branches": set()}
-                if "pushed" in event.get("action_name", ""):
-                    branch = event.get("push_data", {}).get("ref", "").replace("refs/heads/", "")
-                    if branch: projects_to_scan[project_id]["branches"].add(branch)
             events_url = response.links.get("next", {}).get("url")
             events_params = None
         except requests.exceptions.RequestException: break
 
-    # 1.2 Authored Merge Requests (Crucial for squashed/merged work)
-    mr_params = {
-        "scope": "created_by_me",
-        "updated_after": start_date.strftime("%Y-%m-%dT00:00:00Z"),
-        "per_page": 100,
-    }
-    mr_url = f"{instance_url}/api/v4/merge_requests"
-    try:
-        response = requests.get(mr_url, headers=headers, params=mr_params, timeout=20)
-        if response.status_code == 200:
-            for mr in response.json():
-                pid = mr.get("project_id")
-                if not pid: continue
-                if pid not in projects_to_scan: projects_to_scan[pid] = {"branches": set()}
-                projects_to_scan[pid]["branches"].add(mr.get("target_branch"))
-                
-                # Record squash SHA to exclude it later
-                if mr.get("squash_commit_sha"):
-                    squashed_shas.add(mr.get("squash_commit_sha")[:8])
+    # 1.2 Merge Requests (Crucial for squashed/merged work and finding commits merged by others)
+    for pid in list(projects_to_scan.keys()):
+        mr_url = f"{instance_url}/api/v4/projects/{pid}/merge_requests"
+        mr_params = {"updated_after": start_date.strftime("%Y-%m-%dT00:00:00Z"), "per_page": 100}
+        try:
+            response = requests.get(mr_url, headers=headers, params=mr_params, timeout=20)
+            if response.status_code == 200:
+                for mr in response.json():
+                    # Ensure target branch is scanned
+                    projects_to_scan[pid]["branches"].add(mr.get("target_branch"))
+                    
+                    # Record squash SHA to exclude it later
+                    if mr.get("squash_commit_sha"):
+                        squashed_shas.add(mr.get("squash_commit_sha")[:8])
 
-                # Fetch original commits from the MR itself (works even if branch is deleted)
-                mr_commits_url = f"{instance_url}/api/v4/projects/{pid}/merge_requests/{mr['iid']}/commits"
-                try:
-                    mrc_resp = requests.get(mr_commits_url, headers=headers, timeout=15)
-                    if mrc_resp.status_code == 200:
-                        for c in mrc_resp.json():
-                            if c.get("author_email") == user_email:
-                                c["project_id"] = pid
-                                c["branch_hint"] = f"mr-{mr['iid']}"
-                                mr_commits.append(c)
-                except Exception: pass
-    except requests.exceptions.RequestException: pass
+                    # Fetch commits from the MR to find user's contributions
+                    mrc_url = f"{instance_url}/api/v4/projects/{pid}/merge_requests/{mr['iid']}/commits"
+                    try:
+                        mrc_resp = requests.get(mrc_url, headers=headers, timeout=15)
+                        if mrc_resp.status_code == 200:
+                            for c in mrc_resp.json():
+                                if c.get("author_email") == user_email:
+                                    c["project_id"] = pid
+                                    c["target_branch"] = mr.get("target_branch")
+                                    mr_commits.append(c)
+                    except Exception: pass
+        except Exception: pass
 
-    # 1.3 Membership
+    # 1.3 Membership (to find projects the user is a member of)
     try:
         response = requests.get(f"{instance_url}/api/v4/projects?membership=true&per_page=100", headers=headers, timeout=20)
         if response.status_code == 200:
             for proj in response.json():
                 pid = proj.get("id")
                 if pid not in projects_to_scan: projects_to_scan[pid] = {"branches": set()}
-                projects_to_scan[pid]["branches"].add(proj.get("default_branch"))
                 projects_to_scan[pid]["path_with_namespace"] = proj.get("path_with_namespace")
     except Exception: pass
 
     # --- Step 2: Resolve names and finalize branch list ---
-    branch_order = ["master", "main", "prod", "nonprod", "develop", "development"]
     active_branches = []
 
     for pid, data in projects_to_scan.items():
@@ -139,7 +129,6 @@ def get_gitlab_commits(
                 r = requests.get(f"{instance_url}/api/v4/projects/{pid}", headers=headers, timeout=10)
                 if r.status_code == 200:
                     data["path_with_namespace"] = r.json().get("path_with_namespace")
-                    data["branches"].add(r.json().get("default_branch"))
             except Exception: data["path_with_namespace"] = "Unknown Project"
         
         repo_name = data.get("path_with_namespace", "Unknown Project")
@@ -151,25 +140,43 @@ def get_gitlab_commits(
                 skipped_repos.add(repo_name)
             continue
 
-        # Add priority branches to every project
-        for b in branch_order: data["branches"].add(b)
+        # Fetch all branches for the project to ensure comprehensive collection
+        try:
+            branches_url = f"{instance_url}/api/v4/projects/{pid}/repository/branches"
+            branches_params = {"per_page": 100}
+            while branches_url:
+                resp = requests.get(branches_url, headers=headers, params=branches_params, timeout=15)
+                if resp.status_code == 200:
+                    for b_info in resp.json():
+                        data["branches"].add(b_info["name"])
+                    branches_url = resp.links.get("next", {}).get("url")
+                    branches_params = None
+                else: break
+        except Exception: pass
+        
+        # Order of branches matters: "select first branch that appears in search results"
+        # We've collected branches from MR targets first, then from the API.
         for b in data["branches"]:
             if b: active_branches.append((pid, repo_name, b))
 
     # --- Step 3: Fetch and Deduplicate Commits ---
     all_commits = []
-    processed_shas = set()
+    processed_shas = {} # sha -> branch
 
-    def process_commit(commit, pid, repo_name, branch):
+    def process_commit(commit, pid, repo_name, branch, is_mr=False):
         short_sha = commit["short_id"]
         if short_sha in processed_shas:
-            print(f"INFO: Skipping duplicate commit {short_sha} in {repo_name} (already processed)")
+            prev_branch = processed_shas[short_sha]
+            reason = f"already processed in branch '{prev_branch}'"
+            if is_mr:
+                reason = f"already processed as part of MR to target branch '{prev_branch}'"
+            print(f"INFO: Skipping duplicate commit {short_sha} in {repo_name} ({reason})")
             return
         if short_sha in squashed_shas:
-            print(f"INFO: Skipping squashed commit {short_sha} in {repo_name}")
+            print(f"INFO: Skipping squashed commit {short_sha} in {repo_name} (result of merge request with squash)")
             return
         
-        processed_shas.add(short_sha)
+        processed_shas[short_sha] = branch
         
         # Diff handling
         diff_text = ""
@@ -194,15 +201,14 @@ def get_gitlab_commits(
             "diff": diff_text
         })
 
-    # Process MR commits first (they are specific targets)
+    # 1. Process MR commits first: "If yes, collect commits from target branch and skip from source branch"
     for c in mr_commits:
         pid = c["project_id"]
         repo = projects_to_scan.get(pid, {}).get("path_with_namespace", "Unknown")
-        process_commit(c, pid, repo, c["branch_hint"])
+        process_commit(c, pid, repo, c["target_branch"], is_mr=True)
 
-    # Process discovered branches
-    sorted_branches = sorted(active_branches, key=lambda x: (x[1], branch_order.index(x[2]) if x[2] in branch_order else 99, x[2]))
-    for pid, repo, branch in sorted_branches:
+    # 2. Process discovered branches in order: "select first branch that appears in search results"
+    for pid, repo, branch in active_branches:
         print(f"Fetching commits for '{repo}' on branch '{branch}'...")
         params = {"ref_name": branch, "since": start_date.isoformat(), "author": user_email, "per_page": 100}
         url = f"{instance_url}/api/v4/projects/{pid}/repository/commits"
