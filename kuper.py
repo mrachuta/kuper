@@ -175,7 +175,25 @@ def get_gitlab_commits(
                 if d_resp.status_code == 200:
                     diff_parts = []
                     for d in d_resp.json():
-                        header = f"--- {d.get('new_path') or d.get('old_path')} ---"
+                        old_path = d.get("old_path")
+                        new_path = d.get("new_path")
+                        if d.get("renamed_file"):
+                            change_type = "RENAMED"
+                            header = f"--- [{change_type}] {old_path} -> {new_path} ---"
+                        elif d.get("deleted_file"):
+                            change_type = "DELETED"
+                            header = f"--- [{change_type}] {old_path} ---"
+                        elif d.get("new_file"):
+                            change_type = "ADDED"
+                            header = f"--- [{change_type}] {new_path} ---"
+                        else:
+                            change_type = "MODIFIED"
+                            header = f"--- [{change_type}] {new_path or old_path} ---"
+
+                        old_mode = d.get("a_mode")
+                        new_mode = d.get("b_mode")
+                        if old_mode and new_mode and old_mode != new_mode:
+                            header = f"{header}\nmode: {old_mode} -> {new_mode}"
                         diff_parts.append(f"{header}\n{d.get('diff')}")
                     diff_text = "\n\n".join(diff_parts)
             except Exception: pass
