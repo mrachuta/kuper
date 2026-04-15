@@ -67,7 +67,7 @@ def get_gitlab_commits(
 
     # --- Step 1: Discovery ---
 
-    # 1.1 Events API (to find active projects)
+    # 1.1 Events API (to find active projects and active branches)
     events_params = {"after": start_date.strftime("%Y-%m-%d"), "per_page": 100}
     events_url = f"{instance_url}/api/v4/events"
     while events_url:
@@ -78,6 +78,9 @@ def get_gitlab_commits(
                 project_id = event.get("project_id")
                 if not project_id: continue
                 if project_id not in projects_to_scan: projects_to_scan[project_id] = {"branches": set()}
+                push_ref = event.get("push_data", {}).get("ref")
+                if push_ref and push_ref.startswith("refs/heads/"):
+                    projects_to_scan[project_id]["branches"].add(push_ref.replace("refs/heads/", "", 1))
             events_url = response.links.get("next", {}).get("url")
             events_params = None
         except requests.exceptions.RequestException: break
@@ -140,22 +143,8 @@ def get_gitlab_commits(
                 skipped_repos.add(repo_name)
             continue
 
-        # Fetch all branches for the project to ensure comprehensive collection
-        try:
-            branches_url = f"{instance_url}/api/v4/projects/{pid}/repository/branches"
-            branches_params = {"per_page": 100}
-            while branches_url:
-                resp = requests.get(branches_url, headers=headers, params=branches_params, timeout=15)
-                if resp.status_code == 200:
-                    for b_info in resp.json():
-                        data["branches"].add(b_info["name"])
-                    branches_url = resp.links.get("next", {}).get("url")
-                    branches_params = None
-                else: break
-        except Exception: pass
-        
         # Order of branches matters: "select first branch that appears in search results"
-        # We've collected branches from MR targets first, then from the API.
+        # We've collected branches from Events API and MR targets.
         for b in data["branches"]:
             if b: active_branches.append((pid, repo_name, b))
 
