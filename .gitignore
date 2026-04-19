@@ -2,6 +2,7 @@
 config.yaml
 commit_report*.html
 token.bak
+reports/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
