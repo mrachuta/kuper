@@ -76,6 +76,7 @@ class KuperService:
         skipped_repos = set()
         mr_commits = []
         squashed_shas = set()
+        merge_shas = set()
 
         events_params = {"after": start_date.strftime("%Y-%m-%d"), "per_page": 100}
         events_url = f"{instance_url}/api/v4/events"
@@ -112,6 +113,9 @@ class KuperService:
                 )
                 if response.status_code == 200:
                     for mr in response.json():
+                        merge_commit_sha = mr.get("merge_commit_sha")
+                        if merge_commit_sha:
+                            merge_shas.add(merge_commit_sha[:8])
                         projects_to_scan[pid]["branches"].add(mr.get("target_branch"))
                         if mr.get("squash_commit_sha"):
                             squashed_shas.add(mr.get("squash_commit_sha")[:8])
@@ -126,6 +130,11 @@ class KuperService:
                             )
                             if mrc_resp.status_code == 200:
                                 for commit in mrc_resp.json():
+                                    if (
+                                        merge_commit_sha
+                                        and commit.get("id") == merge_commit_sha
+                                    ):
+                                        continue
                                     if commit.get("author_email") == user_email:
                                         commit["project_id"] = pid
                                         commit["target_branch"] = mr.get(
@@ -204,6 +213,12 @@ class KuperService:
                 print(
                     f"INFO: Skipping squashed commit {short_sha} in {repo_name} "
                     "(result of merge request with squash)"
+                )
+                return
+            if short_sha in merge_shas:
+                print(
+                    f"INFO: Skipping merge commit {short_sha} in {repo_name} "
+                    "(result of merge request merged on behalf of another user)"
                 )
                 return
 
